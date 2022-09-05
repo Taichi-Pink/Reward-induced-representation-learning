@@ -6,17 +6,17 @@ import  numpy as np
 classes for training encoder
 """
 class Encoder(nn.Module):
-    def __init__(self, resolution=64, ch_img=3, ch_conv=4, ch_linear=64):
+    def __init__(self, resolution=64, ch_img=1, ch_conv=4, ch_linear=64):
         super(Encoder, self).__init__()
         self.resolution = resolution
-        conv_layers = [nn.Conv2d(ch_img, ch_conv, kernel_size=3, stride=2, padding=1), nn.BatchNorm2d(ch_conv)]
+
+        conv_layers = [nn.Conv2d(ch_img, ch_conv, kernel_size=3, stride=2, padding=1)]
         resolution /= 2
 
         while (resolution != 1):
-            conv_layers.append(nn.Conv2d(ch_conv, ch_conv * 2, kernel_size=3, stride=2, padding=1))
-            ch_conv *= 2
-            conv_layers.append(nn.BatchNorm2d(ch_conv))
-            resolution /= 2
+          conv_layers.append(nn.Conv2d(ch_conv, ch_conv * 2, kernel_size=3, stride=2, padding=1))
+          ch_conv *= 2
+          resolution /= 2
 
         self.conv_layers = nn.ModuleList(conv_layers)
         self.linear_layer = nn.Linear(in_features=ch_conv, out_features=ch_linear)
@@ -25,21 +25,13 @@ class Encoder(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, imgs):
-        # print("encoder conv-------------------------")
         temp = imgs
-        i = 0
         for conv_layer in self.conv_layers:
-            if i % 2 == 0:
-                temp = self.tanh(conv_layer(temp))
-            else:
-                temp = conv_layer(temp)
-            i += 1
-            # print(temp[0:1, 0:1, 0:1, 0:1 ])
-            # print(temp[2:3, 0:1, 0:1, 0:1])
+            temp = conv_layer(temp)
+            temp = self.tanh(temp)
+                  
         out_ = self.linear_layer(temp.squeeze())
-        # print("encoder out-------------------------")
-        # print(out_[0:1, 0:1])
-        # print(out_[2:3, 0:1])
+
         return out_
 
 
