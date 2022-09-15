@@ -319,7 +319,6 @@ def ppo(env_fn, env_mode="state-based", rl_mode="oracle", actor_critic=MLPActorC
     epoch = 0
     # Main loop: collect experience in env and update/log each epoch
     while step_ < epochs:
-
         for t in range(steps_per_epoch):
             ####image-based
             if env_mode == 'image-based':
@@ -330,16 +329,11 @@ def ppo(env_fn, env_mode="state-based", rl_mode="oracle", actor_critic=MLPActorC
             ####
             a, v, logp = ac.step(torch.as_tensor(o, dtype=torch.float32))  # a value: (0,1)
 
-
             ### Ziyi
-            if (epoch == epochs-1) and (t>(steps_per_epoch-31)):
-                print("step: ", t, "pos:", a)
-
             next_o, r, d, info = env.step(a)  # d means if done
 
-
             step_ += 1
-            if ((epoch % save_freq == 0) or (epoch == epochs - 1)):
+            if ((epoch % save_freq == 0) or (step_ == epochs - 1)):
                 if env_mode=="state-based":
                     image_trace.append(info)
                 else:
@@ -364,7 +358,7 @@ def ppo(env_fn, env_mode="state-based", rl_mode="oracle", actor_critic=MLPActorC
         # Perform PPO update!
         update()
         # Save model and image trace
-        if (epoch % save_freq == 0) or (epoch == epochs - 1):
+        if (epoch % save_freq == 0) or (step_ == epochs - 1):
             torch.save(ac.state_dict(), "./model_weights/rl/"+rl_mode+"/"+distractor+"/ac"+str(epoch)+".pt")
             image_stack = np.stack(image_trace, axis=0)  # (steps_per_epoch, 64, 64)
             img = make_image_seq_strip([image_stack[None, steps_per_epoch-30:steps_per_epoch, None, :, :].repeat(3, axis=2).astype(np.float32)],
