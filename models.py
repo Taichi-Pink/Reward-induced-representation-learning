@@ -212,30 +212,25 @@ def mlp(sizes, activation, output_activation=nn.Identity):
     """
     layers = []
     for j in range(len(sizes) - 1):
-        act = activation if j < len(sizes) - 2 else output_activation
+        act = activation #if j < len(sizes) - 2 else output_activation
         layers += [nn.Linear(sizes[j], sizes[j + 1]), act()]
     return nn.Sequential(*layers)
 
+def mlp_critic(sizes, activation, output_activation=nn.Identity):
+    """
+    nn.Identity module will just return the input without any manipulation and can be used to e.g. replace other layers.
+    """
+    layers = []
+    for j in range(len(sizes) - 1):
+        act = activation if j < len(sizes) - 2 else output_activation
+        layers += [nn.Linear(sizes[j], sizes[j + 1]), act()]
+    return nn.Sequential(*layers)
 
 def count_vars(module):
     return sum([np.prod(p.shape) for p in module.parameters()])
 
 
 def discount_cumsum(x, discount):
-    """
-    magic from rllab for computing discounted cumulative sums of vectors.
-
-    input:
-        vector x,
-        [x0,
-         x1,
-         x2]
-
-    output:
-        [x0 + discount * x1 + discount^2 * x2,
-         x1 + discount * x2,
-         x2]
-    """
     return scipy.signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
 
 
@@ -257,21 +252,6 @@ class Actor(nn.Module):
             logp_a = self._log_prob_from_distribution(pi, act)
         return pi, logp_a
 
-
-class MLPCategoricalActor(Actor):
-
-    def __init__(self, obs_dim, act_dim, hidden_sizes, activation):
-        super().__init__()
-        self.logits_net = mlp([obs_dim] + list(hidden_sizes) + [act_dim], activation)
-
-    def _distribution(self, obs):
-        logits = self.logits_net(obs)
-        return Categorical(logits=logits)
-
-    def _log_prob_from_distribution(self, pi, act):
-        return pi.log_prob(act)
-
-
 class MLPGaussianActor(Actor):
 
     def __init__(self, obs_dim, act_dim, hidden_sizes, activation):
@@ -282,6 +262,7 @@ class MLPGaussianActor(Actor):
 
     def _distribution(self, obs):
         mu = self.mu_net(obs)
+        #print("pi distribution mu-------------------------:", mu)
         std = torch.exp(self.log_std)
         return Normal(mu, std)
 
@@ -293,7 +274,7 @@ class MLPCritic(nn.Module):
 
     def __init__(self, obs_dim, hidden_sizes, activation):
         super().__init__()
-        self.v_net = mlp([obs_dim] + list(hidden_sizes) + [1], activation)
+        self.v_net = mlp_critic([obs_dim] + list(hidden_sizes) + [1], activation)
 
     def forward(self, obs):
         return torch.squeeze(self.v_net(obs), -1)  # Critical to ensure v has right shape.
@@ -315,19 +296,22 @@ class MLPActorCritic(nn.Module):
 
         # build value function
         self.v = MLPCritic(obs_dim, hidden_sizes, activation)
+        self.EPSILON = 0.9   # greedy police
 
     def step(self, obs):
         with torch.no_grad():
             pi = self.pi._distribution(obs)
+            #if (np.random.uniform() > self.EPSILON) and (epoch<200000):  # act non-greedy or state-action have no value
+            #  a = torch.as_tensor(np.random.rand(1,2)*2.0-1.0, dtype=torch.float32)
+            #else:   # act greedy
             a = pi.sample()
+            
             logp_a = self.pi._log_prob_from_distribution(pi, a)
             v = self.v(obs)
         return a.numpy(), v.numpy(), logp_a.numpy()
 
     def act(self, obs):
         return self.step(obs)[0]
-
-
 
 
 
