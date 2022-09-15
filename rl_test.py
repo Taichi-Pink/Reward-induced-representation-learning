@@ -251,7 +251,7 @@ def ppo(env_fn, env_mode="state-based", rl_mode="oracle", actor_critic=MLPActorC
 
     ###Ziyi
     writer = SummaryWriter(log_dir="./logs/logs_rl/"+rl_mode+"/"+distractor)
-    step = 0
+    step_ = 0
     image_trace = []
     ######
 
@@ -316,16 +316,17 @@ def ppo(env_fn, env_mode="state-based", rl_mode="oracle", actor_critic=MLPActorC
 
     # Prepare for interaction with environment
     o, ep_ret, ep_len = env.reset(), 0, 0
-
+    epoch = 0
     # Main loop: collect experience in env and update/log each epoch
-    for epoch in range(epochs):
-        print("epoch", epoch)
+    while step_ < epochs:
+
         for t in range(steps_per_epoch):
             ####image-based
             if env_mode == 'image-based':
-                o = o[None, None, :, :].repeat(2, axis=0)
+                o = o*2.0-1.0
+                o = o[None, None, :, :]
                 o = en_(torch.as_tensor(o, dtype=torch.float32).to(device))
-                o = o[0:1, :].squeeze(0).cpu().detach().numpy()
+                o = o.cpu().detach().numpy()
             ####
             a, v, logp = ac.step(torch.as_tensor(o, dtype=torch.float32))  # a value: (0,1)
 
@@ -336,8 +337,8 @@ def ppo(env_fn, env_mode="state-based", rl_mode="oracle", actor_critic=MLPActorC
 
             next_o, r, d, info = env.step(a)  # d means if done
 
-            writer.add_scalar('reward/'+distractor, r, step)
-            step += 1
+
+            step_ += 1
             if ((epoch % save_freq == 0) or (epoch == epochs - 1)):
                 if env_mode=="state-based":
                     image_trace.append(info)
@@ -352,16 +353,19 @@ def ppo(env_fn, env_mode="state-based", rl_mode="oracle", actor_critic=MLPActorC
             o = next_o
 
             if d:
-                v = 0 #_, v, _ = ac.step(torch.as_tensor(o, dtype=torch.float32))
+                v = 0
                 buf.finish_path(v)
-                print("EpRet=", ep_ret, "EpLen=", ep_len)
+                if (epoch % 20 == 0):
+                  print("EpRet=", ep_ret, "epoch=", epoch)
+                writer.add_scalar('reward/' + distractor, ep_ret, step_)
+                
                 o, ep_ret, ep_len = env.reset(), 0, 0
 
         # Perform PPO update!
         update()
         # Save model and image trace
-        torch.save(ac.state_dict(), "./model_weights/rl/"+rl_mode+"/"+distractor+"/ac"+str(epoch)+".pt")
         if (epoch % save_freq == 0) or (epoch == epochs - 1):
+            torch.save(ac.state_dict(), "./model_weights/rl/"+rl_mode+"/"+distractor+"/ac"+str(epoch)+".pt")
             image_stack = np.stack(image_trace, axis=0)  # (steps_per_epoch, 64, 64)
             img = make_image_seq_strip([image_stack[None, steps_per_epoch-30:steps_per_epoch, None, :, :].repeat(3, axis=2).astype(np.float32)],
                                        sep_val=1.0).astype(np.float32)
@@ -369,6 +373,7 @@ def ppo(env_fn, env_mode="state-based", rl_mode="oracle", actor_critic=MLPActorC
             img = img.astype(np.uint8)
             io.imwrite("./logs/logs_rl/" + rl_mode + "/"+distractor+"/trace" + str(epoch) + ".png", img[0].transpose(1, 2, 0))
         image_trace = []
+        epoch = epoch + 1
 
 if __name__ == '__main__':
     import argparse
@@ -382,7 +387,7 @@ if __name__ == '__main__':
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--seed', '-s', type=int, default=0)
     parser.add_argument('--steps', type=int, default=10000)#change4: 1000
-    parser.add_argument('--epochs', type=int, default=500)#change5
+    parser.add_argument('--epochs', type=int, default=5000000)#change5
     parser.add_argument('--exp_name', type=str, default='ppo')
     args = parser.parse_args()
 
