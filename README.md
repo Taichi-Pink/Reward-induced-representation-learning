@@ -4,7 +4,9 @@
 ## Requirements
 
 - python >= 3.6
-- pytorch >= 1.3
+- pytorch == 1.9
+- opencv-python
+- gym==0.21
 
 ## Installation Instructions
 
